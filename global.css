@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+	/* Primary accent colors */
+	--color-accent: #0ea5e9; /* cyan-500 as default */
+	--color-accent-light: #7dd3fc; /* cyan-300 */
+
+	/* Text colors */
+	--color-text-dark: #0f172a; /* slate-900 */
+	--color-text-light: #64748b; /* slate-500 */
+
+	/* Background / surface */
+	--color-background: #ffffff;
+	--color-surface: #f8fafc;
+}
