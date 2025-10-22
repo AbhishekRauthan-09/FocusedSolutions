@@ -1,228 +1,298 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import CircularProgressBar from 'components/Reuables/CircularProgressBar';
-
+import CircularProgressBar from 'Reusables/CircularProgressBar';
+import BottomSheetComponent from 'Reusables/BottomSheet';
+import AddToDo from 'components/Todos/AddToDo';
+import DailyTodos from 'components/Todos/DailyTodos';
+import WeeklyTodos from 'components/Todos/WeeklyTodos';
+import MonthlyTodos from 'components/Todos/MonthlyTodos';
+import { SceneMap, TabBar, TabView } from 'react-native-tab-view';
 export default function TodosScreen() {
-  const [todos, setTodos] = useState([
+  // Separate lists for each range
+  const [dailyTodos, setDailyTodos] = useState([
     {
+      id: 1,
       title: 'Master Chapter 5: Photosynthesis',
       expanded: true,
-      subtargets: [
+      subTasks: [
         { text: 'Read pages 120-135', done: true },
         { text: 'Complete practice questions 1-10', done: true },
         { text: 'Review lecture notes', done: false },
       ],
     },
+  ]);
+  const [weeklyTodos, setWeeklyTodos] = useState([]);
+  const [monthlyTodos, setMonthlyTodos] = useState([
     {
+      id: 2,
       title: 'Prepare for Midterm Exam',
       expanded: false,
-      subtargets: [],
+      subTasks: [],
     },
   ]);
+  const [selectedRange, setSelectedRange] = useState('Daily');
   const [modalVisible, setModalVisible] = useState(false);
-  const [newTodo, setNewTodo] = useState('');
-  const [subtargets, setSubtargets] = useState(['']);
 
-  const addTodo = () => {
+  // FAB visibility based on user activity (hide after 2s of inactivity)
+  const [fabVisible, setFabVisible] = useState(true);
+  const hideTimeoutRef = useRef(null);
+
+  const registerActivity = () => {
+    setFabVisible(true);
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    hideTimeoutRef.current = setTimeout(() => setFabVisible(false), 2000);
+  };
+
+  useEffect(() => {
+    // start initial hide timer
+    registerActivity();
+    return () => {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
+
+  const ranges = {
+    0: 'Daily',
+    1: 'Weekly',
+    2: 'Monthly',
+  };
+
+  // tab view
+  const layout = useWindowDimensions();
+  const [index, setIndex] = React.useState(0);
+  const [routes] = React.useState([
+    { key: 'Daily', title: 'Daily' },
+    { key: 'Weekly', title: 'Weekly' },
+    { key: 'Monthly', title: 'Monthly' },
+  ]);
+
+  const renderToDos = (range) => {
+    if (range == 'Daily') {
+      <DailyTodos
+        todos={dailyTodos}
+        onTogglePrimary={(idx) => togglePrimary('Daily', idx)}
+        onToggleSubTask={(idx, subIdx) => toggleSubTask('Daily', idx, subIdx)}
+      />;
+    } else if (range === 'Weekly') {
+      return (
+        <WeeklyTodos
+          todos={weeklyTodos}
+          onTogglePrimary={(idx) => togglePrimary('Weekly', idx)}
+          onToggleSubTask={(idx, subIdx) => toggleSubTask('Weekly', idx, subIdx)}
+        />
+      );
+    } else return;
+    <MonthlyTodos
+      todos={monthlyTodos}
+      onTogglePrimary={(idx) => togglePrimary('Monthly', idx)}
+      onToggleSubTask={(idx, subIdx) => toggleSubTask('Monthly', idx, subIdx)}
+    />;
+  };
+
+  const onAddTodo = ({ newTodo, newType, subTasks }) => {
     if (newTodo.trim()) {
-      setTodos([
-        ...todos,
-        {
-          title: newTodo,
-          subtargets: subtargets.filter((s) => s.trim()).map((s) => ({ text: s, done: false })),
-        },
-      ]);
-      setNewTodo('');
-      setSubtargets(['']);
+      const newItem = {
+        id: Date.now(),
+        title: newTodo,
+        subTasks: subTasks.filter((s) => s.trim()).map((s) => ({ text: s, done: false })),
+        expanded: subTasks.filter((s) => s.trim()).length > 0,
+      };
+      if (newType === 'Daily') setDailyTodos((prev) => [...prev, newItem]);
+      else if (newType === 'Weekly') setWeeklyTodos((prev) => [...prev, newItem]);
+      else setMonthlyTodos((prev) => [...prev, newItem]);
+
       setModalVisible(false);
+      return { success: true };
     }
-  };
-
-  const updateSubtarget = (idx, value) => {
-    const updated = [...subtargets];
-    updated[idx] = value;
-    setSubtargets(updated);
-  };
-
-  const addSubtargetField = () => {
-    setSubtargets([...subtargets, '']);
+    return { success: false };
   };
 
   // Progress calculation
-  const totalTasks = todos.reduce(
-    (acc, todo) => acc + (todo.subtargets.length > 0 ? todo.subtargets.length : 1),
-    0
-  );
-  const completedTasks = todos.reduce(
-    (acc, todo) =>
-      acc +
-      (todo.subtargets.length > 0
-        ? todo.subtargets.filter((sub) => sub.done).length
-        : todo.done
-          ? 1
-          : 0),
-    0
-  );
-  const progress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+  // Visible todos depend on the selected range
+  // const visibleTodos =
+  //   selectedRange === 'Daily'
+  //     ? dailyTodos
+  //     : selectedRange === 'Weekly'
+  //       ? weeklyTodos
+  //       : monthlyTodos;
 
-  // Get progress color based on percentage
+  // const totalTasks = visibleTodos.reduce(
+  //   (acc, todo) => acc + (todo.subTasks.length > 0 ? todo.subTasks.length : 1),
+  //   0
+  // );
+  // const completedTasks = visibleTodos.reduce(
+  //   (acc, todo) =>
+  //     acc +
+  //     (todo.subTasks.length > 0
+  //       ? todo.subTasks.filter((sub) => sub.done).length
+  //       : todo.done
+  //         ? 1
+  //         : 0),
+  //   0
+  // );
+  // const progress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
-  // Expand/collapse handler
-  const toggleExpand = (idx) => {
-    setTodos((prev) =>
-      prev.map((todo, i) => (i === idx ? { ...todo, expanded: !todo.expanded } : todo))
-    );
+  // Check if all subTasks are complete
+  const areAllSubTasksComplete = (subTasks) => {
+    return subTasks.length > 0 && subTasks.every((sub) => sub.done);
   };
 
-  // Checkbox handler
-  const toggleSubtask = (todoIdx, subIdx) => {
-    setTodos((prev) =>
-      prev.map((todo, i) =>
-        i === todoIdx
-          ? {
-              ...todo,
-              subtargets: todo.subtargets.map((sub, j) =>
-                j === subIdx ? { ...sub, done: !sub.done } : sub
-              ),
-            }
-          : todo
-      )
-    );
+  // Checkbox handler for subTasks
+  const toggleSubTask = (type, todoIdx, subIdx) => {
+    const updater = (arr) =>
+      arr.map((todo, i) => {
+        if (i === todoIdx) {
+          const updatedSubTasks = todo.subTasks.map((sub, j) =>
+            j === subIdx ? { ...sub, done: !sub.done } : sub
+          );
+          return {
+            ...todo,
+            subTasks: updatedSubTasks,
+            done: areAllSubTasksComplete(updatedSubTasks),
+          };
+        }
+        return todo;
+      });
+
+    if (type === 'Daily') setDailyTodos((prev) => updater(prev));
+    else if (type === 'Weekly') setWeeklyTodos((prev) => updater(prev));
+    else setMonthlyTodos((prev) => updater(prev));
   };
+
+  // Toggle primary (no-subtargets) task done state using original index
+  const togglePrimary = (type, origIdx) => {
+    const updater = (arr) => arr.map((t, i) => (i === origIdx ? { ...t, done: !t.done } : t));
+    if (type === 'Daily') setDailyTodos((prev) => updater(prev));
+    else if (type === 'Weekly') setWeeklyTodos((prev) => updater(prev));
+    else setMonthlyTodos((prev) => updater(prev));
+  };
+
+  const RenderDailyTodos = () => (
+    <DailyTodos
+      todos={dailyTodos}
+      onTogglePrimary={(idx) => togglePrimary('Daily', idx)}
+      onToggleSubTask={(idx, subIdx) => toggleSubTask('Daily', idx, subIdx)}
+    />
+  );
+
+  const RenderWeeklyTodos = () => (
+    <WeeklyTodos
+      todos={weeklyTodos}
+      onTogglePrimary={(idx) => togglePrimary('Weekly', idx)}
+      onToggleSubTask={(idx, subIdx) => toggleSubTask('Weekly', idx, subIdx)}
+    />
+  );
+
+  const RenderMonthlyTodos = () => (
+    <MonthlyTodos
+      todos={monthlyTodos}
+      onTogglePrimary={(idx) => togglePrimary('Monthly', idx)}
+      onToggleSubTask={(idx, subIdx) => toggleSubTask('Monthly', idx, subIdx)}
+    />
+  );
+
+  const renderTabBar = (props) => (
+    <TabBar
+      {...props}
+      style={{
+        backgroundColor: 'transparent', // Tab bar background
+        elevation: 5,
+        backgroundColor: '#fff',
+        padding: 0,
+      }}
+      indicatorStyle={{
+        backgroundColor: '#0ea5e9', // underline indicator color
+      }}
+      tabStyle={{
+        padding: 0,
+      }}
+    />
+  );
 
   return (
-    <SafeAreaView edges={['bottom', 'top']} style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-      <View className="flex-1 px-4 pt-4">
-        {/* Header with title and circular progress */}
-        <View className="mb-4 flex-row items-center justify-between">
-          <Text className="text-xl font-bold text-gray-900">My Todos</Text>
-          <View className="items-center justify-center">
-            <CircularProgressBar progress={progress} />
-          </View>
+    <View className="flex-1" onStartShouldSetResponder={() => true} onResponderGrant={() => registerActivity()}>
+      {/* Range selector */}
+
+      {/* Header with title and circular progress */}
+      {/* <View className="mb-4 flex-row items-center justify-between pb-1">
+        <Text className="text-3xl font-bold text-gray-600">My Todos</Text>
+        <View className="h-[40px] items-center justify-center">
+          <CircularProgressBar progress={progress} />
         </View>
+      </View> */}
 
-        {/* Todo cards */}
-        <ScrollView className="flex-1 ">
-          {todos.map((todo, idx) => (
-            <View key={idx} className="mb border-b border-gray-200">
-              {todo.subtargets.length === 0 ? (
-                // Primary task with single checkbox, not collapsible, checkbox on right
-                <View className="flex-row items-center justify-between p-4">
-                  <Text
-                    className={`text-base font-semibold ${todo.done ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                    {todo.title}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setTodos((prev) =>
-                        prev.map((t, i) => (i === idx ? { ...t, done: !t.done } : t))
-                      );
-                    }}
-                    activeOpacity={0.7}>
-                    <Ionicons
-                      name={todo.done ? 'checkbox' : 'square-outline'}
-                      size={22}
-                      color={todo.done ? '#38bdf8' : '#cbd5e1'}
-                    />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                // Collapsible card for todos with subtargets
-                <>
-                  <TouchableOpacity
-                    className="flex-row items-center justify-between p-4"
-                    onPress={() => toggleExpand(idx)}
-                    activeOpacity={0.8}>
-                    <Text className="text-base font-semibold text-gray-900">{todo.title}</Text>
-                    <Ionicons
-                      name={todo.expanded ? 'chevron-up' : 'chevron-down'}
-                      size={22}
-                      color="#64748b"
-                    />
-                  </TouchableOpacity>
-                  {todo.expanded && (
-                    <View className="px-4 pb-4">
-                      {todo.subtargets.map((sub, sidx) => (
-                        <TouchableOpacity
-                          key={sidx}
-                          className="mb-2 flex-row items-center"
-                          onPress={() => toggleSubtask(idx, sidx)}
-                          activeOpacity={0.7}>
-                          <Ionicons
-                            name={sub.done ? 'checkbox' : 'square-outline'}
-                            size={22}
-                            color={sub.done ? '#38bdf8' : '#cbd5e1'}
-                            style={{ marginRight: 8 }}
-                          />
-                          <Text
-                            className={`text-base ${sub.done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                            {sub.text}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+      {/* <View className="mb-4 flex-row items-start justify-start " style={{ columnGap: 5 }}>
+        {['Daily', 'Weekly', 'Monthly'].map((r) => (
+          <TouchableOpacity
+            key={r}
+            onPress={() => setSelectedRange(r)}
+            className={`rounded px-3 py-1 ${selectedRange === r ? 'bg-accent' : 'bg-accentValue/10'}`}>
+            <Text className={`${selectedRange === r ? 'text-white' : 'text-accent'} font`}>
+              {r}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View> */}
 
-        {/* Floating Add Button */}
-        <TouchableOpacity
-          className="absolute bottom-8 right-8 rounded-full bg-blue-400 p-4 shadow-lg"
-          onPress={() => setModalVisible(true)}
-          activeOpacity={0.8}>
-          <Ionicons name="add" size={32} color="#fff" />
-        </TouchableOpacity>
+      <TabView
+        navigationState={{ index, routes }}
+        renderScene={SceneMap({
+          Daily: RenderDailyTodos,
+          Weekly: RenderWeeklyTodos,
+          Monthly: RenderMonthlyTodos,
+        })}
+        onIndexChange={setIndex}
+        initialLayout={{ width: layout.width }}
+        renderTabBar={renderTabBar}
+        commonOptions={{
+          label: ({ route, labelText, focused, color }) => (
+            <Text
+              className="text-lg"
+              style={{ color: focused ? '#0ea5e9' : '#4b5563', margin: 8, fontWeight: 500 }}>
+              {labelText ?? route.name}
+            </Text>
+          ),
+        }}
+      />
 
-        {/* Modal for adding todo (unchanged) */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={modalVisible}
-          onRequestClose={() => setModalVisible(false)}>
-          <View className="flex-1 items-center justify-center bg-black/30">
-            <View className="w-80 rounded-2xl bg-white p-6 shadow-lg">
-              <Text className="mb-2 text-xl font-bold text-blue-500">Add New Target</Text>
-              <TextInput
-                className="mb-4 border-b border-blue-400 py-2 text-base text-gray-700"
-                placeholder="Main target..."
-                value={newTodo}
-                onChangeText={setNewTodo}
-                placeholderTextColor="#7dd3fc"
-              />
-              <Text className="mb-2 text-base text-gray-700">Subtargets</Text>
-              {subtargets.map((sub, idx) => (
-                <TextInput
-                  key={idx}
-                  className="mb-2 border-b border-gray-200 py-1 text-sm text-gray-600"
-                  placeholder={`Subtarget ${idx + 1}`}
-                  value={sub}
-                  onChangeText={(val) => updateSubtarget(idx, val)}
-                  placeholderTextColor="#64748b"
-                />
-              ))}
-              <TouchableOpacity
-                className="mb-4 mt-2 flex-row items-center"
-                onPress={addSubtargetField}>
-                <Ionicons name="add-circle-outline" size={20} color="#38bdf8" />
-                <Text className="ml-1 text-blue-400">Add subtarget</Text>
-              </TouchableOpacity>
-              <View className="flex-row justify-end">
-                <TouchableOpacity className="mr-4" onPress={() => setModalVisible(false)}>
-                  <Text className="text-gray-500">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity className="rounded-full bg-blue-400 px-4 py-2" onPress={addTodo}>
-                  <Text className="font-semibold text-white">Add</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+      {/* Floating Action Buttons */}
+      {fabVisible && (
+        <View className="absolute bottom-8 right-4" style={{ rowGap: 12 }}>
+          <TouchableOpacity
+            className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-blue-400 shadow-lg"
+            onPress={() => setModalVisible(!modalVisible)}
+            activeOpacity={0.8}>
+            <Ionicons name="add" size={32} color="#fff" />
+          </TouchableOpacity>
+
+          <View className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-white">
+            <CircularProgressBar progress={80} size={50} />
           </View>
-        </Modal>
-      </View>
-    </SafeAreaView>
+          <TouchableOpacity
+            className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-green-500 shadow-lg"
+            onPress={() => setModalVisible(!modalVisible)}
+            activeOpacity={0.8}>
+            <Ionicons name="cloud-done-outline" size={29} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <BottomSheetComponent
+        isOpen={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+        }}
+        children={<AddToDo onAddTodo={onAddTodo} closeModal={() => setModalVisible(false)} />}
+      />
+    </View>
   );
 }

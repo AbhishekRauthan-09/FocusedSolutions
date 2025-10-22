@@ -12,6 +12,7 @@ module.exports = {
         textLight: 'var(--color-text-light)',
         background: 'var(--color-background)',
         surface: 'var(--color-surface)',
+        accentValue: '#0ea5e9'
       },
     },
   },
